@@ -1,6 +1,6 @@
 // The one hook every repo's settings call: `node hook.mjs claude` or `node hook.mjs codex`.
 // It puts the rules in a new session, says when a new session could pay off, blocks watching a GitHub
-// run in the foreground, and stops the first edit of a screen file until the UI guideline is read. No
+// run or sleeping in the foreground, and stops the first edit of a screen file until the UI guideline is read. No
 // network and no dependencies: the session start command in settings.json downloads this file and
 // RULES.md. A failure here never stops the agent.
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
@@ -90,6 +90,21 @@ export function isForegroundWatch(toolInput) {
   return /\bgh\s+(run\s+watch|pr\s+checks\b[^;&|\n]*--watch)/.test(commandOnly(toolInput?.command ?? ""));
 }
 
+// Measured 2026-11-04: the sleep rule alone left 25 foreground waits of about 20 to 90 seconds in a day.
+// Under 5 seconds is a short retry, not waiting for work. Only a sleep in command position counts.
+const SLEEP_UNIT_SECONDS = { "": 1, s: 1, m: 60, h: 3600, d: 86400 };
+const SLEEP_FROM_SECONDS = 5;
+
+export function isForegroundSleep(toolInput) {
+  if (toolInput?.run_in_background) return false;
+  const sleeps = commandOnly(toolInput?.command ?? "").matchAll(
+    /(?:^|[;&|\n({]|\b(?:do|then|else)\s)\s*(?:sleep|start-sleep)(?:\s+-s\w*)?\s+(\d+(?:\.\d+)?)([smhd]?)(?=[\s;&|)}]|$)/gi,
+  );
+  return [...sleeps].some(
+    ([, amount, unit]) => Number(amount) * SLEEP_UNIT_SECONDS[unit.toLowerCase()] >= SLEEP_FROM_SECONDS,
+  );
+}
+
 const GUIDELINE = join("vendor", "ui-kit", "GUIDELINES.md");
 
 // Measured 2026-11-04 on the repos that vendor ui-kit. A plain substring also caught guide, build, quiz
@@ -174,7 +189,9 @@ function main(tool) {
   } else if (event === "PreToolUse") {
     const stop = isForegroundWatch(input.tool_input)
       ? "GitHub 실행을 앞에서 지켜보지 않는다. run_in_background로 걸면 끝날 때 알림이 온다.\n"
-      : tool === "claude" && guidelineStop(input);
+      : isForegroundSleep(input.tool_input)
+        ? "sleep으로 앞에서 기다리지 않는다. 기다릴 명령을 run_in_background로 걸면 끝날 때 알림이 온다.\n"
+        : tool === "claude" && guidelineStop(input);
     if (stop) {
       process.stderr.write(stop);
       process.exitCode = 2;

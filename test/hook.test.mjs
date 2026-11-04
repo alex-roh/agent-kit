@@ -11,6 +11,7 @@ import {
   contextBand,
   contextNote,
   contextTokens,
+  isForegroundSleep,
   isForegroundWatch,
   isScreenFile,
   readGuideline,
@@ -52,6 +53,40 @@ test("only a really running foreground watch is blocked", () => {
   assert.ok(!isForegroundWatch({ command: "cat > a.md <<'EOF'\ngh run watch 1\nEOF\nls" }));
   assert.ok(isForegroundWatch({ command: "cat > a.md <<'EOF'\ntext\nEOF\ngh run watch 1" }));
   assert.equal(commandOnly("ls"), "ls");
+});
+
+test("only a really running foreground sleep of 5 seconds or more is blocked", () => {
+  for (const command of [
+    "sleep 5",
+    "sleep 2m",
+    "sleep 20 && git add a.txt",
+    "ls; sleep 30",
+    "while true; do sleep 10; done",
+    "Start-Sleep 30",
+    "Start-Sleep -Seconds 30",
+    "git status; start-sleep -s 60",
+  ]) {
+    assert.ok(isForegroundSleep({ command }), command);
+  }
+  for (const command of [
+    "sleep 2",
+    "sleep 0.5 && git add a.txt",
+    "Start-Sleep -Milliseconds 5000",
+    "python sleep.py 30",
+    "git log --grep sleep 30",
+    'git commit -m "sleep 30을 막음"',
+    "cat > a.md <<'EOF'\nsleep 30\nEOF\nls",
+  ]) {
+    assert.ok(!isForegroundSleep({ command }), command);
+  }
+  assert.ok(!isForegroundSleep({ command: "sleep 30", run_in_background: true }));
+  assert.ok(!isForegroundSleep({}));
+});
+
+test("a foreground sleep returns 2 and says what to do", () => {
+  const r = run({ hook_event_name: "PreToolUse", tool_name: "PowerShell", tool_input: { command: "Start-Sleep 30" } });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /run_in_background/);
 });
 
 test("rules come from the saved file; none saved says nothing", () => {

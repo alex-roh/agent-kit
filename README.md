@@ -5,7 +5,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | `RULES.md` | 공통 규칙. 여기만 고치면 다음 세션부터 적용된다 |
-| `hook.mjs` | 세션 시작 때 규칙을 넣고, 문맥이 커지면 새 세션을 권할 때를 알리고, GitHub 실행을 앞에서 지켜보는 명령을 막고, ui-kit 지침을 읽기 전 첫 화면 파일 수정을 한 번 막는다 |
+| `hook.mjs` | 세션 시작 때 규칙을 넣고, 문맥이 커지면 새 세션을 권할 때를 알리고, GitHub 실행을 앞에서 지켜보는 명령과 5초 이상의 `sleep`을 막고, ui-kit 지침을 읽기 전 첫 화면 파일 수정을 한 번 막는다 |
 | `settings.json` | 레포 `.claude/settings.json`에 넣을 내용 |
 | `codex-hooks.json` | PC마다 `~/.codex/hooks.json`에 둘 내용. Codex의 `/hooks`에서 한 번 승인한다. 윈도우 Codex는 PowerShell을 쓰므로 어느 셸에서나 뜻이 같은 `node -e` 한 줄로 둔다 |
 
@@ -26,4 +26,4 @@ Git, Node, GitHub CLI와 쓰는 에이전트를 설치해 로그인하고 레포
 
 ## 고칠 때
 
-`node --test`를 돌린 뒤 main에 올린다. 받은 `hook.mjs`가 `node --check`를 통과하지 못하면 쓰던 것을 유지한다.
+`node --test`를 돌린 뒤 main에 올린다. 받은 `hook.mjs`가 `node --check`를 통과하지 못하면 쓰던 것을 유지한다. `RULES.md`와 `hook.mjs`는 다음 세션부터 저절로 적용되지만, `settings.json`은 각 레포에 복사돼 있어 바꾸면 레포마다 맞춰야 한다.
