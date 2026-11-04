@@ -29,7 +29,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Bash|PowerShell|Edit|Write",
         "hooks": [
           {
             "type": "command",

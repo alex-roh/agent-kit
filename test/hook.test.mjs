@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -11,6 +12,8 @@ import {
   contextNote,
   contextTokens,
   isForegroundWatch,
+  isScreenFile,
+  readGuideline,
   rulesText,
 } from "../hook.mjs";
 
@@ -89,4 +92,164 @@ test("the Codex command means the same in Bash, PowerShell and cmd", () => {
   const code = command.match(/^node -e "(.*)"$/s)?.[1];
   assert.ok(code, "a single node -e call");
   assert.doesNotMatch(code, /["$`%\\]/);
+});
+
+test("screen files are told apart from vendored, test, doc and data files", () => {
+  for (const p of [
+    "site/src/render.js",
+    "src/ui/pages-x.mjs",
+    "cloudflare/admin-kit.mjs",
+    "app/web/src/app/nav.ts",
+    "a/b.tsx",
+    "a/b.css",
+    "src\\ui\\x.mjs",
+  ])
+    assert.ok(isScreenFile(p), p);
+  for (const p of [
+    "vendor/ui-kit/kit.js",
+    "vendor/x.css",
+    "tests/page.css",
+    "site/test/render.test.js",
+    "src/core/guidance-transfer.ts",
+    "site/tools/build_data.py",
+    "courses/notes/basics-quiz.js",
+    "docs/ui-project.md",
+    "site/src/data/a.json",
+    "eval/guidance/a.txt",
+  ])
+    assert.ok(!isScreenFile(p), p);
+});
+
+const readRow = (file_path, name = "Read") =>
+  JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name, input: { file_path } }] } });
+const GL = "C:\\Github\\life\\vendor\\ui-kit\\GUIDELINES.md";
+
+test("only a Read of the vendored guideline after the last compaction counts", () => {
+  assert.equal(readGuideline(`${readRow(GL)}\n`), true);
+  assert.equal(readGuideline(`${readRow("C:/Github/life/vendor/ui-kit/GUIDELINES.md")}\n`), true);
+  const user = JSON.stringify({ type: "user", message: { content: `see ${GL}` } });
+  assert.equal(readGuideline(`${user}\n`), false);
+  assert.equal(readGuideline(`${readRow("C:\\Github\\ui-kit\\GUIDELINES.md")}\n`), false);
+  const grep = JSON.stringify({
+    type: "assistant",
+    message: { content: [{ type: "tool_use", name: "Grep", input: { pattern: GL, path: GL } }] },
+  });
+  assert.equal(readGuideline(`${grep}\n`), false);
+  const compact = '{"isCompactSummary":true}';
+  assert.equal(readGuideline(`${readRow(GL)}\n${compact}\n`), false);
+  assert.equal(readGuideline(`${readRow(GL)}\n${compact}\n${readRow(GL)}\n`), true);
+  assert.equal(readGuideline(`{broken GUIDELINES.md\n${readRow(GL)}\n`), true);
+});
+
+function guidelineSetup({ withGuideline = true, readIt = false } = {}) {
+  const repo = mkdtempSync(join(tmpdir(), "agent-kit-repo-"));
+  if (withGuideline) {
+    mkdirSync(join(repo, "vendor", "ui-kit"), { recursive: true });
+    writeFileSync(join(repo, "vendor", "ui-kit", "GUIDELINES.md"), "# g\n");
+  }
+  mkdirSync(join(repo, "src"), { recursive: true });
+  const guide = join(repo, "vendor", "ui-kit", "GUIDELINES.md");
+  const transcript = join(repo, "transcript.jsonl");
+  writeFileSync(transcript, readIt ? `${readRow(guide)}\n` : `${row({ input_tokens: 1 })}\n`);
+  const session_id = `s-${randomUUID()}`;
+  const marker = join(tmpdir(), `agent-kit-guideline-${session_id.replace(/\W/g, "")}`);
+  const call = (file_path, extra = {}) => ({
+    hook_event_name: "PreToolUse",
+    tool_name: "Edit",
+    tool_input: { file_path, old_string: "a", new_string: "b" },
+    session_id,
+    transcript_path: transcript,
+    cwd: repo,
+    ...extra,
+  });
+  const cleanup = () => {
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(marker, { force: true });
+  };
+  return { repo, guide, transcript, session_id, call, cleanup };
+}
+
+test("a screen edit is stopped once until the guideline was read", () => {
+  const t = guidelineSetup();
+  try {
+    const file = join(t.repo, "src", "ui.css");
+    const first = run(t.call(file));
+    assert.equal(first.status, 2);
+    assert.ok(first.stderr.includes(t.guide), first.stderr);
+    assert.equal(run(t.call(file)).status, 0);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a screen edit passes when the transcript shows the guideline was read", () => {
+  const t = guidelineSetup({ readIt: true });
+  try {
+    assert.equal(run(t.call(join(t.repo, "src", "ui.css"))).status, 0);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a non-screen edit passes and leaves no marker behind", () => {
+  const t = guidelineSetup();
+  try {
+    assert.equal(run(t.call(join(t.repo, "docs", "a.md"))).status, 0);
+    assert.equal(run(t.call(join(t.repo, "src", "ui.css"))).status, 2);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("editing the vendored kit itself or a repo without the guideline passes", () => {
+  const t = guidelineSetup();
+  const u = guidelineSetup({ withGuideline: false });
+  try {
+    assert.equal(run(t.call(join(t.repo, "vendor", "ui-kit", "kit.css"))).status, 0);
+    assert.equal(run(u.call(join(u.repo, "src", "ui.css"))).status, 0);
+  } finally {
+    t.cleanup();
+    u.cleanup();
+  }
+});
+
+test("a missing transcript file or session id does not stop anything", () => {
+  const t = guidelineSetup();
+  try {
+    const file = join(t.repo, "src", "ui.css");
+    const noTranscript = run(t.call(file, { transcript_path: join(t.repo, "nope.jsonl") }));
+    assert.equal(noTranscript.status, 0);
+    assert.equal(noTranscript.stderr, "");
+    assert.equal(run(t.call(file, { session_id: undefined })).status, 0);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a relative path is resolved against cwd", () => {
+  const t = guidelineSetup();
+  try {
+    assert.equal(run(t.call(join("src", "ui.css"))).status, 2);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("Write is stopped like Edit; Bash without a file and codex are not", () => {
+  const t = guidelineSetup();
+  const c = guidelineSetup();
+  try {
+    const file = join(t.repo, "src", "ui.css");
+    assert.equal(run(t.call(file, { tool_name: "Write" })).status, 2);
+    assert.equal(run(t.call(file, { tool_name: "Bash", tool_input: { command: "ls" } })).status, 0);
+    assert.equal(run(c.call(join(c.repo, "src", "ui.css")), "codex").status, 0);
+  } finally {
+    t.cleanup();
+    c.cleanup();
+  }
+});
+
+test("the foreground watch block still returns 2", () => {
+  const r = run({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "gh run watch 123" } });
+  assert.equal(r.status, 2);
 });

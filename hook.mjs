@@ -1,10 +1,11 @@
 // The one hook every repo's settings call: `node hook.mjs claude` or `node hook.mjs codex`.
-// It puts the rules in a new session, says when a new session could pay off, and blocks watching a
-// GitHub run in the foreground. No network and no dependencies: the session start command in
-// settings.json downloads this file and RULES.md. A failure here never stops the agent.
+// It puts the rules in a new session, says when a new session could pay off, blocks watching a GitHub
+// run in the foreground, and stops the first edit of a screen file until the UI guideline is read. No
+// network and no dependencies: the session start command in settings.json downloads this file and
+// RULES.md. A failure here never stops the agent.
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 // How full the context was at the last model call, or 0 right after a compaction (the old size no
@@ -89,6 +90,62 @@ export function isForegroundWatch(toolInput) {
   return /\bgh\s+(run\s+watch|pr\s+checks\b[^;&|\n]*--watch)/.test(commandOnly(toolInput?.command ?? ""));
 }
 
+const GUIDELINE = join("vendor", "ui-kit", "GUIDELINES.md");
+
+// Measured 2026-11-04 on the repos that vendor ui-kit. A plain substring also caught guide, build, quiz
+// and continuity, and path words also caught docs and data, so words count only on code files. The path
+// is relative to the repo: a folder name such as worker-kit says nothing about the file.
+export function isScreenFile(path) {
+  const p = String(path).replaceAll("\\", "/").toLowerCase();
+  if (/(^|\/)(vendor|tests?)\/|\.test\./.test(p)) return false;
+  if (/\.(css|html|tsx|jsx)$/.test(p)) return true;
+  return (
+    /\.(js|mjs|ts)$/.test(p) &&
+    /(^|[/._-])(ui|kit|pages?|render\w*)($|[/._-])|(^|\/)admin-|(^|\/)(site|web)\/src\//.test(p)
+  );
+}
+
+// Only a Read counts: the rules text names this path too. A compaction drops what was read.
+export function readGuideline(jsonl) {
+  const lines = jsonl.slice(jsonl.lastIndexOf('"isCompactSummary":true') + 1).split("\n");
+  return lines.some((line) => {
+    if (!line.includes("GUIDELINES.md")) return false;
+    try {
+      const content = JSON.parse(line).message?.content;
+      return (
+        Array.isArray(content) &&
+        content.some(
+          (c) =>
+            c.type === "tool_use" &&
+            c.name === "Read" &&
+            /(^|[\\/])vendor[\\/]ui-kit[\\/]GUIDELINES\.md$/i.test(c.input?.file_path ?? ""),
+        )
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
+function repoWithGuideline(file) {
+  for (let dir = dirname(file); ; dir = dirname(dir)) {
+    if (existsSync(join(dir, GUIDELINE))) return dir;
+    if (dir === dirname(dir)) return "";
+  }
+}
+
+// Stops once per session: on a second try the agent has judged the edit is not screen work.
+function guidelineStop({ tool_name, tool_input, transcript_path, session_id, cwd }) {
+  if (!/^(Edit|Write)$/.test(tool_name) || !tool_input?.file_path || !transcript_path || !session_id) return "";
+  const file = resolve(cwd ?? ".", tool_input.file_path);
+  const repo = repoWithGuideline(file);
+  if (!repo || !isScreenFile(relative(repo, file))) return "";
+  const said = join(tmpdir(), `agent-kit-guideline-${String(session_id).replace(/\W/g, "")}`);
+  if (existsSync(said) || readGuideline(readFileSync(transcript_path, "utf8"))) return "";
+  writeFileSync(said, "");
+  return `화면 파일을 고치기 전에 ${join(repo, GUIDELINE)} 를 Read로 읽는다. 화면 일이 아니면 그대로 다시 시도한다.\n`;
+}
+
 export function rulesText(path = join(homedir(), ".agent-kit", "RULES.md")) {
   if (!existsSync(path)) return "";
   const rules = readFileSync(path, "utf8").trim();
@@ -114,11 +171,14 @@ function main(tool) {
   } else if (event === "UserPromptSubmit") {
     // Codex transcripts have another shape.
     if (tool === "claude") say(tool, event, contextNoteFor(input.transcript_path, input.session_id));
-  } else if (event === "PreToolUse" && isForegroundWatch(input.tool_input)) {
-    process.stderr.write(
-      "GitHub 실행을 앞에서 지켜보지 않는다. run_in_background로 걸면 끝날 때 알림이 온다.\n",
-    );
-    process.exitCode = 2;
+  } else if (event === "PreToolUse") {
+    const stop = isForegroundWatch(input.tool_input)
+      ? "GitHub 실행을 앞에서 지켜보지 않는다. run_in_background로 걸면 끝날 때 알림이 온다.\n"
+      : tool === "claude" && guidelineStop(input);
+    if (stop) {
+      process.stderr.write(stop);
+      process.exitCode = 2;
+    }
   }
 }
 
