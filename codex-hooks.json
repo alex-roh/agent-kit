@@ -6,7 +6,7 @@
           {
             "type": "command",
             "timeout": 15,
-            "command": "D=~/.agent-kit; U=https://raw.githubusercontent.com/alex-roh/agent-kit/main; mkdir -p \"$D\"; T=\"$D/new-$$\"; curl -fsS --max-time 5 -o \"$T.mjs\" \"$U/hook.mjs\" && node --check \"$T.mjs\" && mv \"$T.mjs\" \"$D/hook.mjs\"; curl -fsS --max-time 5 -o \"$T.md\" \"$U/RULES.md\" && [ -s \"$T.md\" ] && mv \"$T.md\" \"$D/RULES.md\"; rm -f \"$T.mjs\" \"$T.md\"; [ -f \"$D/hook.mjs\" ] && node \"$D/hook.mjs\" codex; exit 0"
+            "command": "node -e \"const f=require('fs'),p=require('path'),c=require('child_process'),e=process.execPath,d=p.join(require('os').homedir(),'.agent-kit'),k=p.join(d,'hook.mjs'),t=p.join(d,'new-'+process.pid);const g=async n=>{try{const r=await fetch('https://raw.githubusercontent.com/alex-roh/agent-kit/main/'+n,{signal:AbortSignal.timeout(5000)});if(r.ok)return await r.text()}catch{}};(async()=>{f.mkdirSync(d,{recursive:true});const h=await g('hook.mjs');if(h){f.writeFileSync(t+'.mjs',h);if(c.spawnSync(e,['--check',t+'.mjs']).status===0)f.renameSync(t+'.mjs',k);else f.rmSync(t+'.mjs')}const m=await g('RULES.md');if(m&&m.trim()){f.writeFileSync(t+'.md',m);f.renameSync(t+'.md',p.join(d,'RULES.md'))}if(f.existsSync(k))c.spawnSync(e,[k,'codex'],{stdio:'inherit'})})().catch(()=>{}).finally(()=>process.exit(0))\""
           }
         ]
       }

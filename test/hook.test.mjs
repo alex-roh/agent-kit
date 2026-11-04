@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -80,4 +80,13 @@ test("a new session gets the rules, a resumed one does not; Codex gets JSON", ()
   const codex = JSON.parse(run(start, "codex", env).stdout);
   assert.equal(codex.hookSpecificOutput.hookEventName, "SessionStart");
   assert.match(codex.hookSpecificOutput.additionalContext, /# 규칙/);
+});
+
+// Codex on Windows runs commands in PowerShell, where the first Bash version failed to parse (2026-11-04).
+test("the Codex command means the same in Bash, PowerShell and cmd", () => {
+  const url = new URL("../codex-hooks.json", import.meta.url);
+  const { command } = JSON.parse(readFileSync(url, "utf8")).hooks.SessionStart[0].hooks[0];
+  const code = command.match(/^node -e "(.*)"$/s)?.[1];
+  assert.ok(code, "a single node -e call");
+  assert.doesNotMatch(code, /["$`%\\]/);
 });
