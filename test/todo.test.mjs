@@ -103,6 +103,7 @@ test("a TODO.md that cannot be read does not lose the session", () => {
       encoding: "utf8",
     });
     assert.equal(result.status, 0);
-    assert.doesNotMatch(result.stdout, /\[할 일\]/);
+    // The rules text printed beside it mentions `[할 일]`, so only a line that starts with it is the list.
+    assert.doesNotMatch(result.stdout, /^\[할 일\]/m);
   });
 });
