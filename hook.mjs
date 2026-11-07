@@ -1,9 +1,9 @@
 // The one hook every repo's settings call: `node hook.mjs claude` or `node hook.mjs codex`.
-// It puts the rules in a new session, says when a new session could pay off, blocks watching a GitHub
+// It puts the rules and the repo's to-do list in a new session, says when a new session could pay off, blocks watching a GitHub
 // run or sleeping in the foreground, and stops the first edit of a screen file until the UI guideline is read. No
 // network and no dependencies: the session start command in settings.json downloads this file and
 // RULES.md. A failure here never stops the agent.
-import { closeSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -167,6 +167,74 @@ export function rulesText(path = join(homedir(), ".agent-kit", "RULES.md")) {
   return rules && `[공통 규칙] agent-kit RULES.md 최신본이다. 이대로 따른다.\n\n${rules}`;
 }
 
+// A repo's TODO.md has "# 지금" and "# 나중". Only 지금 is read out, so long-term items stay out of the
+// context; 나중 is a count. Items before any such heading count as 지금.
+const TODO_SHOWN = 5;
+const TODO_ITEM_CHARS = 100;
+const TODO_OLD_DAYS = 30;
+
+export function parseTodo(text) {
+  const items = { now: [], later: [] };
+  let section = "now";
+  for (const line of String(text).replace(/^﻿/, "").split(/\r?\n/)) {
+    const heading = line.match(/^#+\s*(지금|나중)/);
+    if (heading) section = heading[1] === "지금" ? "now" : "later";
+    else if (/^- \S/.test(line)) items[section].push(line.slice(2).trim());
+  }
+  return items;
+}
+
+// An item ends in "(MM-DD)". The year is not written, so a date still ahead means last year.
+export function isOldTodo(item, now = new Date()) {
+  const date = item.match(/\((\d{2})-(\d{2})\)$/);
+  if (!date) return false;
+  const written = new Date(now.getFullYear(), Number(date[1]) - 1, Number(date[2]));
+  if (written > now) written.setFullYear(written.getFullYear() - 1);
+  // Whole days: the hour of the day and a clock change must not tip day 30 over.
+  return Math.floor((now - written) / 86_400_000) > TODO_OLD_DAYS;
+}
+
+export function repoTodoText(text, now = new Date()) {
+  const { now: current, later } = parseTodo(text);
+  if (!current.length && !later.length) return "";
+  const shown = current
+    .slice(0, TODO_SHOWN)
+    .map((item) => `- ${item.slice(0, TODO_ITEM_CHARS)}${isOldTodo(item, now) ? " [오래됨]" : ""}`);
+  const rest = [
+    current.length > TODO_SHOWN && `지금 칸 외 ${current.length - TODO_SHOWN}개`,
+    later.length > 0 && `나중 ${later.length}개`,
+  ].filter(Boolean);
+  return [
+    "[할 일] 이 레포 TODO.md다. 첫 답 맨 앞에 한 줄로 알린다. [오래됨] 항목은 지울지 나중으로 옮길지 묻는다.",
+    ...shown,
+    ...(rest.length ? [`(${rest.join(", ")})`] : []),
+  ].join("\n");
+}
+
+function readTodo(dir) {
+  const file = join(dir, "TODO.md");
+  return existsSync(file) ? readFileSync(file, "utf8") : "";
+}
+
+// In a repo (or below it) that repo's list; in a folder of repos a count per repo, since which repo
+// the work is in is not known yet. Folders without .git are skipped: vendor copies are not lists.
+export function todoText(cwd, now = new Date()) {
+  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+    if (existsSync(join(dir, ".git"))) return repoTodoText(readTodo(dir), now);
+    if (dir === dirname(dir)) break;
+  }
+  const counts = readdirSync(cwd, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(cwd, entry.name, ".git")))
+    .map((entry) => {
+      const { now: current, later } = parseTodo(readTodo(join(cwd, entry.name)));
+      return current.length || later.length ? `${entry.name} 지금 ${current.length}·나중 ${later.length}` : "";
+    })
+    .filter(Boolean);
+  return counts.length
+    ? `[할 일] 레포별 TODO.md: ${counts.join(", ")}. 첫 답 맨 앞에 한 줄로 알린다. 작업할 레포를 정하면 그 레포 TODO.md의 지금 칸을 읽어 알린다.`
+    : "";
+}
+
 // Codex reads stdout starting with "[" or "{" as JSON and would drop plain text, so it gets JSON.
 function say(tool, event, text) {
   if (!text) return;
@@ -182,7 +250,15 @@ function main(tool) {
   const event = input.hook_event_name;
   if (event === "SessionStart") {
     // A resumed session already holds the rules; after a compaction it has lost them.
-    if (input.source !== "resume") say(tool, event, rulesText());
+    if (input.source === "resume") return;
+    // The list is said once when work starts, not again after a compaction. A broken list must not lose the rules.
+    let todo = "";
+    if (input.source !== "compact") {
+      try {
+        todo = todoText(input.cwd ?? process.cwd());
+      } catch {}
+    }
+    say(tool, event, [rulesText(), todo].filter(Boolean).join("\n\n"));
   } else if (event === "UserPromptSubmit") {
     // Codex transcripts have another shape.
     if (tool === "claude") say(tool, event, contextNoteFor(input.transcript_path, input.session_id));
