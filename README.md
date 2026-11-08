@@ -7,6 +7,7 @@
 | `RULES.md` | 공통 규칙. 여기만 고치면 다음 세션부터 적용된다 |
 | `hook.mjs` | 세션 시작 때 규칙과 그 레포 `TODO.md`의 지금 칸을 넣고, 문맥이 커지면 새 세션을 권할 때를 알리고, GitHub 실행을 앞에서 지켜보는 명령과 5초 이상의 `sleep`을 막고, ui-kit 지침을 읽기 전 첫 화면 파일 수정을 한 번 막는다 |
 | `log.mjs` | 레포들이 모인 폴더에서 각 레포 `LOG.md`(작업 기록, `RULES.md` "기록")를 날짜순으로 모아 보여 준다. `node agent-kit/log.mjs [낱말…] [--repo 이름] [--days N]` |
+| `codex-usage.mjs` | Codex 5시간·주간 사용률을 한 줄로 읽는다(`codex app-server` JSON-RPC). Codex에 맡기기 전에 보인다. `node agent-kit/codex-usage.mjs [--raw]` |
 | `settings.json` | 레포 `.claude/settings.json`에 넣을 내용 |
 | `codex-hooks.json` | PC마다 `~/.codex/hooks.json`에 둘 내용. Codex의 `/hooks`에서 한 번 승인한다. 윈도우 Codex는 PowerShell을 쓰므로 어느 셸에서나 뜻이 같은 `node -e` 한 줄로 둔다 |
 

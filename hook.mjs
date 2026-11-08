@@ -120,22 +120,22 @@ export function isScreenFile(path) {
   );
 }
 
-// Only a Read counts: the rules text names this path too. A compaction drops what was read.
+// A Read counts, and so does a shell read of the file (cat, sed, head, Get-Content, `map.mjs 절` — life's AGENTS.md
+// sends big docs through 절, and a hook that ignored it made a session resend a 15KB write, 2026-11-08).
+// grep and mentions do not count: the rules text names this path too. A compaction drops what was read.
+const GUIDELINE_PATH = /(^|[\\/\s"'])vendor[\\/]ui-kit[\\/]GUIDELINES\.md(?=$|[\s"'])/i;
+const SHELL_READ = /(^|[\s;&|(])(cat|sed|head|tail|less|more|type|Get-Content|gc)\s|map\.mjs\s+절\s/i;
+const readsGuideline = (c) =>
+  c.type === "tool_use" &&
+  ((c.name === "Read" && /(^|[\\/])vendor[\\/]ui-kit[\\/]GUIDELINES\.md$/i.test(c.input?.file_path ?? "")) ||
+    (c.name === "Bash" && GUIDELINE_PATH.test(c.input?.command ?? "") && SHELL_READ.test(c.input?.command ?? "")));
 export function readGuideline(jsonl) {
   const lines = jsonl.slice(jsonl.lastIndexOf('"isCompactSummary":true') + 1).split("\n");
   return lines.some((line) => {
     if (!line.includes("GUIDELINES.md")) return false;
     try {
       const content = JSON.parse(line).message?.content;
-      return (
-        Array.isArray(content) &&
-        content.some(
-          (c) =>
-            c.type === "tool_use" &&
-            c.name === "Read" &&
-            /(^|[\\/])vendor[\\/]ui-kit[\\/]GUIDELINES\.md$/i.test(c.input?.file_path ?? ""),
-        )
-      );
+      return Array.isArray(content) && content.some(readsGuideline);
     } catch {
       return false;
     }
@@ -158,7 +158,7 @@ function guidelineStop({ tool_name, tool_input, transcript_path, session_id, cwd
   const said = join(tmpdir(), `agent-kit-guideline-${String(session_id).replace(/\W/g, "")}`);
   if (existsSync(said) || readGuideline(readFileSync(transcript_path, "utf8"))) return "";
   writeFileSync(said, "");
-  return `화면 파일을 고치기 전에 ${join(repo, GUIDELINE)} 를 Read로 읽는다. 화면 일이 아니면 그대로 다시 시도한다.\n`;
+  return `화면 파일을 고치기 전에 ${join(repo, GUIDELINE)} 를 읽는다(Read나 절·sed 같은 셸 읽기). 화면 일이 아니면 그대로 다시 시도한다.\n`;
 }
 
 export function rulesText(path = join(homedir(), ".agent-kit", "RULES.md")) {

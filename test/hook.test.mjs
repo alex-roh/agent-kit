@@ -159,6 +159,18 @@ const readRow = (file_path, name = "Read") =>
   JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name, input: { file_path } }] } });
 const GL = "C:\\Github\\life\\vendor\\ui-kit\\GUIDELINES.md";
 
+const bashRow = (command) =>
+  JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command } }] } });
+
+test("a shell read of the vendored guideline counts, a grep or another file does not", () => {
+  assert.equal(readGuideline(`${bashRow('node tools/map.mjs 절 vendor/ui-kit/GUIDELINES.md "작업 순서"')}\n`), true);
+  assert.equal(readGuideline(`${bashRow("cd /x && sed -n 1,40p vendor/ui-kit/GUIDELINES.md")}\n`), true);
+  assert.equal(readGuideline(`${bashRow("Get-Content C:\\Github\\life\\vendor\\ui-kit\\GUIDELINES.md")}\n`), true);
+  assert.equal(readGuideline(`${bashRow("grep -n 시안 vendor/ui-kit/GUIDELINES.md")}\n`), false);
+  assert.equal(readGuideline(`${bashRow("cat vendor/worker-kit/GUIDELINES.md")}\n`), false);
+  assert.equal(readGuideline(`${bashRow("cat ui-kit/GUIDELINES.md")}\n`), false);
+});
+
 test("only a Read of the vendored guideline after the last compaction counts", () => {
   assert.equal(readGuideline(`${readRow(GL)}\n`), true);
   assert.equal(readGuideline(`${readRow("C:/Github/life/vendor/ui-kit/GUIDELINES.md")}\n`), true);
