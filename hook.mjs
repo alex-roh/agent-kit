@@ -1,6 +1,6 @@
 // The one hook every repo's settings call: `node hook.mjs claude` or `node hook.mjs codex`.
 // It puts the rules and the repo's to-do list in a new session, says when a new session could pay off, blocks watching a GitHub
-// run or sleeping in the foreground, and stops the first edit of a screen file until the UI guideline is read. No
+// run or sleeping in the foreground, and notes the UI guideline once on the first edit of a screen file. No
 // network and no dependencies: the session start command in settings.json downloads this file and
 // RULES.md. A failure here never stops the agent.
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
@@ -113,6 +113,8 @@ const GUIDELINE = join("vendor", "ui-kit", "GUIDELINES.md");
 export function isScreenFile(path) {
   const p = String(path).replaceAll("\\", "/").toLowerCase();
   if (/(^|\/)(vendor|tests?)\/|\.test\./.test(p)) return false;
+  // Screens the kit does not draw (watch, desk and widget apps, design mockups): the UI guideline says nothing to them.
+  if (/(^|\/)(watch|wear|desk|widget|android|ios|design|mockups?)\//.test(p)) return false;
   if (/\.(css|html|tsx|jsx)$/.test(p)) return true;
   return (
     /\.(js|mjs|ts)$/.test(p) &&
@@ -149,8 +151,8 @@ function repoWithGuideline(file) {
   }
 }
 
-// Stops once per session: on a second try the agent has judged the edit is not screen work.
-function guidelineStop({ tool_name, tool_input, transcript_path, session_id, cwd }) {
+// A note once per session, not a stop: a light edit (wording, a bug) needs no guideline at all (사용자, 2026-11-09).
+export function guidelineNote({ tool_name, tool_input, transcript_path, session_id, cwd }) {
   if (!/^(Edit|Write)$/.test(tool_name) || !tool_input?.file_path || !transcript_path || !session_id) return "";
   const file = resolve(cwd ?? ".", tool_input.file_path);
   const repo = repoWithGuideline(file);
@@ -158,7 +160,7 @@ function guidelineStop({ tool_name, tool_input, transcript_path, session_id, cwd
   const said = join(tmpdir(), `agent-kit-guideline-${String(session_id).replace(/\W/g, "")}`);
   if (existsSync(said) || readGuideline(readFileSync(transcript_path, "utf8"))) return "";
   writeFileSync(said, "");
-  return `화면을 새로 짜거나 모양을 바꾸는 일이면 ${join(repo, GUIDELINE)} 의 0절('좋은 화면')만 읽는다(Read의 limit, 절·sed 같은 셸 읽기). 문구·버그·데이터만 고치는 일이면 읽지 않고 그대로 다시 시도한다.\n`;
+  return `화면을 새로 짜거나 모양을 바꾸는 일이면 ${join(repo, GUIDELINE)} 의 0절('좋은 화면')만 읽는다. 문구·버그·데이터 수정이면 읽지 않는다.`;
 }
 
 export function rulesText(path = join(homedir(), ".agent-kit", "RULES.md")) {
@@ -267,10 +269,13 @@ function main(tool) {
       ? "GitHub 실행을 앞에서 지켜보지 않는다. run_in_background로 걸면 끝날 때 알림이 온다.\n"
       : isForegroundSleep(input.tool_input)
         ? "sleep으로 앞에서 기다리지 않는다. 기다릴 명령을 run_in_background로 걸면 끝날 때 알림이 온다.\n"
-        : tool === "claude" && guidelineStop(input);
+        : "";
     if (stop) {
       process.stderr.write(stop);
       process.exitCode = 2;
+    } else if (tool === "claude") {
+      const note = guidelineNote(input);
+      if (note) process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: note } })}\n`);
     }
   }
 }

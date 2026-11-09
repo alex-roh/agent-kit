@@ -151,6 +151,10 @@ test("screen files are told apart from vendored, test, doc and data files", () =
     "docs/ui-project.md",
     "site/src/data/a.json",
     "eval/guidance/a.txt",
+    "watch/design/face.html",
+    "desk/design/postit.html",
+    "widget/motion-lab.html",
+    "life/watch/app/src/ui/face.css",
   ])
     assert.ok(!isScreenFile(p), p);
 });
@@ -216,14 +220,19 @@ function guidelineSetup({ withGuideline = true, readIt = false } = {}) {
   return { repo, guide, transcript, session_id, call, cleanup };
 }
 
-test("a screen edit is stopped once until the guideline was read", () => {
+const noted = (r) => r.stdout.includes('"additionalContext"');
+
+test("a screen edit gets a note once, never a stop", () => {
   const t = guidelineSetup();
   try {
     const file = join(t.repo, "src", "ui.css");
     const first = run(t.call(file));
-    assert.equal(first.status, 2);
-    assert.ok(first.stderr.includes(t.guide), first.stderr);
-    assert.equal(run(t.call(file)).status, 0);
+    assert.equal(first.status, 0);
+    assert.ok(noted(first) && first.stdout.includes("0절"), first.stdout);
+    assert.equal(JSON.parse(first.stdout).hookSpecificOutput.hookEventName, "PreToolUse");
+    const second = run(t.call(file));
+    assert.equal(second.status, 0);
+    assert.ok(!noted(second), second.stdout);
   } finally {
     t.cleanup();
   }
@@ -232,7 +241,9 @@ test("a screen edit is stopped once until the guideline was read", () => {
 test("a screen edit passes when the transcript shows the guideline was read", () => {
   const t = guidelineSetup({ readIt: true });
   try {
-    assert.equal(run(t.call(join(t.repo, "src", "ui.css"))).status, 0);
+    const r = run(t.call(join(t.repo, "src", "ui.css")));
+    assert.equal(r.status, 0);
+    assert.ok(!noted(r), r.stdout);
   } finally {
     t.cleanup();
   }
@@ -241,8 +252,8 @@ test("a screen edit passes when the transcript shows the guideline was read", ()
 test("a non-screen edit passes and leaves no marker behind", () => {
   const t = guidelineSetup();
   try {
-    assert.equal(run(t.call(join(t.repo, "docs", "a.md"))).status, 0);
-    assert.equal(run(t.call(join(t.repo, "src", "ui.css"))).status, 2);
+    assert.ok(!noted(run(t.call(join(t.repo, "docs", "a.md")))));
+    assert.ok(noted(run(t.call(join(t.repo, "src", "ui.css")))));
   } finally {
     t.cleanup();
   }
@@ -276,20 +287,22 @@ test("a missing transcript file or session id does not stop anything", () => {
 test("a relative path is resolved against cwd", () => {
   const t = guidelineSetup();
   try {
-    assert.equal(run(t.call(join("src", "ui.css"))).status, 2);
+    assert.ok(noted(run(t.call(join("src", "ui.css")))));
   } finally {
     t.cleanup();
   }
 });
 
-test("Write is stopped like Edit; Bash without a file and codex are not", () => {
+test("Write is noted like Edit; Bash without a file and codex are not", () => {
   const t = guidelineSetup();
   const c = guidelineSetup();
   try {
     const file = join(t.repo, "src", "ui.css");
-    assert.equal(run(t.call(file, { tool_name: "Write" })).status, 2);
+    assert.ok(noted(run(t.call(file, { tool_name: "Write" }))));
     assert.equal(run(t.call(file, { tool_name: "Bash", tool_input: { command: "ls" } })).status, 0);
-    assert.equal(run(c.call(join(c.repo, "src", "ui.css")), "codex").status, 0);
+    const cx = run(c.call(join(c.repo, "src", "ui.css")), "codex");
+    assert.equal(cx.status, 0);
+    assert.ok(!noted(cx), cx.stdout);
   } finally {
     t.cleanup();
     c.cleanup();

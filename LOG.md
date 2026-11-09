@@ -2,6 +2,11 @@
 
 최신이 위. 쓰는 법은 `RULES.md` "기록", 모아 보기는 `node agent-kit/log.mjs`.
 
+## 2026-11-09 · 화면 지침 hook을 막기에서 알림으로, 워치·위젯은 건너뜀
+- 바꾼 것: 화면 파일 첫 수정을 exit 2로 한 번 막던 것을 PreToolUse `additionalContext` 한 줄 알림(0절만, 가벼운 수정은 안 읽음)으로. `watch/ wear/ desk/ widget/ android/ ios/ design/ mockup(s)/` 아래는 화면 파일로 보지 않음. 사용자: 갤럭시 워치 같은 일은 보자마자 넘어가야 한다
+- 알게 된 것: `.html`이면 다 화면으로 봐서 Life의 `watch/design/face.html`, `desk/design/postit.html`도 ui-kit 지침을 읽으라고 멈췄다
+- 반영: hook.mjs, README.md
+
 ## 2026-11-09 · 화면 일에 ui-kit 지침 전체 대신 0절만 읽게 함
 - 바꾼 것: "화면 일이면 GUIDELINES.md를 먼저 읽는다"를 "화면을 새로 짜거나 바꿀 때 0절('좋은 화면')만 먼저, 나머지 절은 걸릴 때, 문구·버그·데이터 수정은 안 읽음"으로. 사용자: 가벼운 일에도 kit을 다 읽어 온다. ui-kit 0.18.0에서 0절을 만듦. 화면 파일 첫 수정을 막는 hook 안내도 "0절만, 문구·버그·데이터 수정이면 읽지 않고 다시 시도"로
 - 반영: RULES.md
