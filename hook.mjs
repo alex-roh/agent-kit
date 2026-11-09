@@ -158,7 +158,7 @@ function guidelineStop({ tool_name, tool_input, transcript_path, session_id, cwd
   const said = join(tmpdir(), `agent-kit-guideline-${String(session_id).replace(/\W/g, "")}`);
   if (existsSync(said) || readGuideline(readFileSync(transcript_path, "utf8"))) return "";
   writeFileSync(said, "");
-  return `화면 파일을 고치기 전에 ${join(repo, GUIDELINE)} 를 읽는다(Read나 절·sed 같은 셸 읽기). 화면 일이 아니면 그대로 다시 시도한다.\n`;
+  return `화면을 새로 짜거나 모양을 바꾸는 일이면 ${join(repo, GUIDELINE)} 의 0절('좋은 화면')만 읽는다(Read의 limit, 절·sed 같은 셸 읽기). 문구·버그·데이터만 고치는 일이면 읽지 않고 그대로 다시 시도한다.\n`;
 }
 
 export function rulesText(path = join(homedir(), ".agent-kit", "RULES.md")) {
