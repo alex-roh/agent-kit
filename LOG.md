@@ -2,6 +2,9 @@
 
 최신이 위. 쓰는 법은 `RULES.md` "기록", 모아 보기는 `node agent-kit/log.mjs`.
 
+## 2026-11-10 · 공통 저장소는 규칙만 나누고 코드를 강제하지 않음
+- 바꾼 것: "다른 앱에도 쓸 코드는 kit에 올린다"를 "부품은 맞을 때만 쓰고 강제 검사·절차를 만들지 않는다"로 바꿨다. 화면 일은 ui-kit 0절과 함께 2절(여백과 마감)도 먼저 읽는다. ui-kit 강제가 모든 레포의 화면 자유도를 떨어뜨려서.
+
 ## 2026-11-09 · 화면 지침 hook을 막기에서 알림으로, 워치·위젯은 건너뜀
 - 바꾼 것: 화면 파일 첫 수정을 exit 2로 한 번 막던 것을 PreToolUse `additionalContext` 한 줄 알림(0절만, 가벼운 수정은 안 읽음)으로. `watch/ wear/ desk/ widget/ android/ ios/ design/ mockup(s)/` 아래는 화면 파일로 보지 않음. 사용자: 갤럭시 워치 같은 일은 보자마자 넘어가야 한다
 - 알게 된 것: `.html`이면 다 화면으로 봐서 Life의 `watch/design/face.html`, `desk/design/postit.html`도 ui-kit 지침을 읽으라고 멈췄다
