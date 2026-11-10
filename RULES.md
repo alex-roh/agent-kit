@@ -47,7 +47,7 @@
 
 ## 올리기와 배포
 
-- 최신 main 위로 rebase해 main에 push한다. push 전에 `git log origin/main..HEAD`로 내 커밋만인지 보고, 섞였으면 묻는다. PR은 사용자가 요청할 때만 만든다. 쓴 브랜치는 끝날 때 지운다.
+- 최신 main 위로 rebase해 main에 push한다. push 전에 `git log origin/main..HEAD`로 내 커밋만인지 보고(커밋을 합칠 때는 `origin/main`이 아니라 `git merge-base HEAD origin/main`으로 reset한다. 그사이 main이 움직이면 남의 변경을 되돌리는 커밋이 된다), 섞였으면 묻는다. PR은 사용자가 요청할 때만 만든다. 쓴 브랜치는 끝날 때 지운다.
 - 비밀값·권한·hook·배포 설정·되돌릴 수 없는 마이그레이션·공통 저장소 동작·새 npm 패키지·CI에서 클라우드 자원 만들기만 먼저 묻는다.
 - 배포는 묻지 않고, 수정이 다 끝난 뒤 바뀐 대상만 한 번 한다. 끝나면 URL을 알린다.
 - 노트북에서 작업하면 어느 레포든 노트북에서 직접 배포하고, 외부(클라우드) 세션만 Actions로 배포한다. push로 배포하지 않는다(GitHub Pages처럼 Actions로만 되는 곳은 레포 지침대로). 노트북 배포는 main에 올린 뒤 바꾼 부분을 시험하고, 깨끗한 최신 main에서 그 레포 워크플로의 순서대로(D1 마이그레이션 먼저) `wrangler deploy`를 실행한다. 레포에 배포 후 점검이 있으면 돌린다.
