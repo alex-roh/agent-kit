@@ -10,6 +10,8 @@ import {
   commandOnly,
   contextBand,
   contextNote,
+  delegateNote,
+  DELEGATE_NOTE,
   contextTokens,
   isForegroundSleep,
   isForegroundWatch,
@@ -312,4 +314,12 @@ test("Write is noted like Edit; Bash without a file and codex are not", () => {
 test("the foreground watch block still returns 2", () => {
   const r = run({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "gh run watch 123" } });
   assert.equal(r.status, 2);
+});
+
+test("delegate note: once from 100K, again only after the context falls back under it", () => {
+  assert.deepEqual(delegateNote(99_999, false), { text: "", said: false });
+  assert.deepEqual(delegateNote(120_000, false), { text: DELEGATE_NOTE, said: true });
+  assert.deepEqual(delegateNote(180_000, true), { text: "", said: true });
+  assert.deepEqual(delegateNote(30_000, true), { text: "", said: false });
+  assert.match(DELEGATE_NOTE, /Sonnet/);
 });

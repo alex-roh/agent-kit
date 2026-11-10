@@ -1,9 +1,9 @@
 // The one hook every repo's settings call: `node hook.mjs claude` or `node hook.mjs codex`.
-// It puts the rules and the repo's to-do list in a new session, says when a new session could pay off, blocks watching a GitHub
+// It puts the rules and the repo's to-do list in a new session, says when to hand work to subagents and when a new session could pay off, blocks watching a GitHub
 // run or sleeping in the foreground, and notes the UI guideline once on the first edit of a screen file. No
 // network and no dependencies: the session start command in settings.json downloads this file and
 // RULES.md. A failure here never stops the agent.
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -51,6 +51,17 @@ export function contextBand(tokens) {
   return tokens < CONTEXT_NOTE_FROM ? 0 : Math.floor(tokens / 50_000) * 50_000;
 }
 
+// From 100K a turn of mine costs more than a subagent's start (about 40K), so work of five turns or more should go to one.
+// Knowing the rule was not enough: in the middle of work "this is quick" always looks right (life, 2026-11-10). Said once,
+// and again only after a compaction brings the context back under it.
+const DELEGATE_NOTE_FROM = 100_000;
+export const DELEGATE_NOTE = "[문맥] 10만 토큰을 넘었다. 이제 내 턴이 서브에이전트 시작(약 4만)보다 비싸다. 끝이 분명하고 5턴 넘을 일(브라우저로 읽기, 반복 기록, 긴 로그 정리, 테스트 쓰기·고치기, 재기, 넓은 찾기)은 Sonnet 서브에이전트에 맡기고, 판단과 커밋·배포·운영 DB 쓰기는 직접 한다. 이 글은 언급하지 않는다.";
+
+export function delegateNote(tokens, said) {
+  if (tokens < DELEGATE_NOTE_FROM) return { text: "", said: false };
+  return { text: said ? "" : DELEGATE_NOTE, said: true };
+}
+
 // Only a transcript's end, so a long session does not slow every prompt.
 function fileTail(path) {
   const fd = openSync(path, "r");
@@ -68,12 +79,20 @@ function fileTail(path) {
 function contextNoteFor(path, session) {
   if (!path || !session) return "";
   const tokens = contextTokens(fileTail(path));
+  const id = String(session).replace(/\W/g, "");
+  const delegateFile = join(tmpdir(), `agent-kit-delegate-${id}`);
+  const delegate = delegateNote(tokens, existsSync(delegateFile));
+  if (delegate.said && !existsSync(delegateFile)) writeFileSync(delegateFile, "");
+  else if (!delegate.said && existsSync(delegateFile)) rmSync(delegateFile);
   const band = contextBand(tokens);
-  const file = join(tmpdir(), `agent-kit-context-${String(session).replace(/\W/g, "")}`);
+  const file = join(tmpdir(), `agent-kit-context-${id}`);
   const said = existsSync(file) ? Number(readFileSync(file, "utf8")) || 0 : 0;
-  if (band === said) return "";
-  writeFileSync(file, String(band));
-  return band > said ? contextNote(tokens) : "";
+  let note = "";
+  if (band !== said) {
+    writeFileSync(file, String(band));
+    if (band > said) note = contextNote(tokens);
+  }
+  return [delegate.text, note].filter(Boolean).join("\n\n");
 }
 
 // Heredocs and quoted text are what a command writes, not what it runs: a document that only mentions

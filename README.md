@@ -5,7 +5,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | `RULES.md` | 공통 규칙. 여기만 고치면 다음 세션부터 적용된다 |
-| `hook.mjs` | 세션 시작 때 규칙과 그 레포 `TODO.md`의 지금 칸을 넣고, 문맥이 커지면 새 세션을 권할 때를 알리고, GitHub 실행을 앞에서 지켜보는 명령과 5초 이상의 `sleep`을 막고, kit으로 그리는 화면 파일을 처음 고칠 때 ui-kit 지침 0절을 한 번 알린다(막지 않음, 워치·데스크·위젯·시안 폴더는 건너뜀) |
+| `hook.mjs` | 세션 시작 때 규칙과 그 레포 `TODO.md`의 지금 칸을 넣고, 문맥이 10만을 넘으면 한 번 서브에이전트에 맡기라고 알리고, 20만부터 새 세션을 권할 때를 알리고, GitHub 실행을 앞에서 지켜보는 명령과 5초 이상의 `sleep`을 막고, kit으로 그리는 화면 파일을 처음 고칠 때 ui-kit 지침 0절을 한 번 알린다(막지 않음, 워치·데스크·위젯·시안 폴더는 건너뜀) |
 | `log.mjs` | 레포들이 모인 폴더에서 각 레포 `LOG.md`(작업 기록, `RULES.md` "기록")를 날짜순으로 모아 보여 준다. `node agent-kit/log.mjs [낱말…] [--repo 이름] [--days N]` |
 | `codex-usage.mjs` | Codex 5시간·주간 사용률을 한 줄로 읽는다(`codex app-server` JSON-RPC). Codex에 맡기기 전에 보인다. `node agent-kit/codex-usage.mjs [--raw]` |
 | `settings.json` | 레포 `.claude/settings.json`에 넣을 내용 |
