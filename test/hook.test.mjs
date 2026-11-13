@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  CODEX_CUT_NOTE,
   commandOnly,
   contextBand,
   contextNote,
@@ -120,6 +121,9 @@ test("a new session gets the rules, a resumed one does not; Codex gets JSON", ()
   const codex = JSON.parse(run(start, "codex", env).stdout);
   assert.equal(codex.hookSpecificOutput.hookEventName, "SessionStart");
   assert.match(codex.hookSpecificOutput.additionalContext, /# 규칙/);
+  // Codex cuts the middle of long hook output, so the note on what to read comes first; Claude needs none.
+  assert.ok(codex.hookSpecificOutput.additionalContext.startsWith(CODEX_CUT_NOTE));
+  assert.ok(!run(start, "claude", env).stdout.includes("truncated"));
 });
 
 // Codex on Windows runs commands in PowerShell, where the first Bash version failed to parse (2026-11-04).

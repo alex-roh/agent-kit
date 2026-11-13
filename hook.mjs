@@ -256,6 +256,9 @@ export function todoText(cwd, now = new Date()) {
     : "";
 }
 
+export const CODEX_CUT_NOTE =
+  "이 글이 잘렸으면(truncated) 일을 시작하기 전에 끝에 적힌 `Full hook output saved to` 파일을 통째로 읽는다(없으면 `~/.agent-kit/RULES.md`).";
+
 // Codex reads stdout starting with "[" or "{" as JSON and would drop plain text, so it gets JSON.
 function say(tool, event, text) {
   if (!text) return;
@@ -279,7 +282,11 @@ function main(tool) {
         todo = todoText(input.cwd ?? process.cwd());
       } catch {}
     }
-    say(tool, event, [rulesText(), todo].filter(Boolean).join("\n\n"));
+    const rules = rulesText();
+    // Codex keeps only about 2,500 tokens of a hook's output and cuts the middle, yet the "[공통 규칙]" head
+    // survives, so the repo AGENTS.md fallback never fires (2026-11-13). The first line survives the cut.
+    const lead = tool === "codex" && rules ? CODEX_CUT_NOTE : "";
+    say(tool, event, [lead, rules, todo].filter(Boolean).join("\n\n"));
   } else if (event === "UserPromptSubmit") {
     // Codex transcripts have another shape.
     if (tool === "claude") say(tool, event, contextNoteFor(input.transcript_path, input.session_id));
