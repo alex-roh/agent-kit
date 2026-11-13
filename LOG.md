@@ -2,7 +2,7 @@
 
 ## 2026-11-13 · Codex가 잘린 공통 규칙을 끝까지 읽게
 - 바꾼 것: Codex 세션 시작 출력 맨 앞에 "잘렸으면 `Full hook output saved to` 파일을 통째로 읽는다" 한 줄을 넣음(`CODEX_CUT_NOTE`). Codex가 훅 출력을 약 2,500토큰만 남기고 가운데(할 일·기록·실행 기다리기·올리기 앞부분, 약 600토큰)를 잘라내는데, 머리의 `[공통 규칙]`은 남아 레포 AGENTS.md의 "없으면 읽는다"가 발동하지 않아서
-- 알게 된 것: 잘림은 Codex 세션 기록(`~/.codex/sessions/…jsonl`)의 첫 developer 메시지에 `Warning: truncated output`과 전문 저장 경로로 보인다. 머리와 꼬리는 남는다
+- 알게 된 것: 잘림은 Codex 세션 기록(`~/.codex/sessions/…jsonl`)의 첫 developer 메시지에 `Warning: truncated output`과 전문 저장 경로로 보인다. 머리와 꼬리는 남는다. 헛돈 일: 훅을 stdin 없이 돌려 빈 출력을 '안 나옴'으로 볼 뻔함(`{"hook_event_name":"SessionStart",…}`을 넘겨야 함). Bash로 worktree에 `cd`해 `git worktree remove`가 Permission denied(~/.claude/CLAUDE.md에 이미 있는 규칙을 어김, prune 뒤 Remove-Item으로 지움)
 - 반영: 안 함
 
 ## 2026-11-13 · 고치는 세션은 각자 worktree, 본 폴더는 실행 전용
